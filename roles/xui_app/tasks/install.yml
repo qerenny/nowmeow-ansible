@@ -5,7 +5,10 @@
 
 - name: Install 3x-ui (MHSanaei fork)
   ansible.builtin.shell: |
-    bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+    curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh -o /tmp/install_xui.sh
+    chmod +x /tmp/install_xui.sh
+
+    echo "n" | bash /tmp/install_xui.sh
   args:
     executable: /bin/bash
   when: not xui_bin.stat.exists

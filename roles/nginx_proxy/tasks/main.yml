@@ -36,7 +36,7 @@
     owner: root
     group: root
     mode: '0644'
-    validate: 'nginx -t -c %s'
+    validate: 'nginx -t -p /etc/nginx/ -c %s'
   notify: Restart Nginx
 
 - name: Enable and start Nginx

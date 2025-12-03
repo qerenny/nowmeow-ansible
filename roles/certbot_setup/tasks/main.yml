@@ -1,3 +1,16 @@
+- name: Prevent Nginx from starting immediately after installation
+  ansible.builtin.copy:
+    content: |
+      #!/bin/sh
+      exit 101
+    dest: /usr/sbin/policy-rc.d
+    mode: '0755'
+
+- name: Fix broken dpkg/apt state if exists
+  ansible.builtin.command: dpkg --configure -a
+  changed_when: true
+  failed_when: false
+
 - name: Install Certbot and dependencies
   ansible.builtin.apt:
     name:
@@ -5,6 +18,19 @@
       - python3-certbot-nginx
     state: present
     update_cache: true
+
+- name: Disable IPv6 in default Nginx config
+  ansible.builtin.replace:
+    path: /etc/nginx/sites-available/default
+    regexp: '^(.*listen \[::\]:80.*)$'
+    replace: '# \1'
+  ignore_errors: true # Игнорируем, если файла нет (хотя он должен быть)
+
+# 5. Убираем "глушилку", возвращаем систему в норму
+- name: Remove policy-rc.d to allow services to start normally
+  ansible.builtin.file:
+    path: /usr/sbin/policy-rc.d
+    state: absent
 
 - name: Check if certificate already exists
   ansible.builtin.stat:

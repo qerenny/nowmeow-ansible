@@ -1,3 +1,14 @@
+# 1. Fix the missing directory issue first
+- name: Ensure SSH privilege separation directory exists
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: inventory_hostname in groups['initial_setup_group']
+
+# 2. Now run your original template task
 - name: Change SSH configuration
   ansible.builtin.template:
     src: sshd_config.j2
@@ -8,7 +19,7 @@
     validate: 'sshd -t -f %s'
   notify: Restart sshd
   when: inventory_hostname in groups['initial_setup_group']
-
+  
 - name: Disable DNS resolution and DNS Forwarding in SSHD (Extra Security)
   ansible.builtin.lineinfile:
     path: /etc/ssh/sshd_config

@@ -1,76 +1,212 @@
----
-- name: Install Python3 (required for transformation script)
+- name: Install Python3 (required for system)
   ansible.builtin.apt:
     name: python3
     state: present
 
-- name: Login to Source Server
-  ansible.builtin.uri:
-    url: "{{ migration_manager_source_url }}/login"
-    method: POST
-    body_format: form-urlencoded
-    body:
-      username: "{{ migration_manager_source_username }}"
-      password: "{{ migration_manager_source_password }}"
-    status_code: 200
-    headers:
-      Content-Type: "application/x-www-form-urlencoded"
-  register: migration_manager_source_login
-  delegate_to: localhost # Выполняем с компьютера Ansible
-
-- name: Export Config from Source
-  ansible.builtin.uri:
-    url: "{{ migration_manager_source_url }}/panel/api/inbounds/list"
-    method: GET
-    headers:
-      Cookie: "{{ migration_manager_source_login.cookies_string }}"
-    return_content: true
-  register: migration_manager_source_export
+# Ждем, пока порт X-UI поднимется
+- name: Wait for X-UI port to be open
+  become: false
   delegate_to: localhost
+  ansible.builtin.wait_for:
+    host: "{{ domain_name }}"
+    port: "{{ xui_app_web_port }}"
+    delay: 5
+    timeout: 60
+    state: started
 
-- name: Deploy Transformation Script
-  ansible.builtin.template:
-    src: process_config.py.j2
-    dest: /tmp/transform_json.py
-    mode: '0755'
+# --- ШАГ 1: Проверяем состояние Целевого сервера ---
 
-- name: Run Transformation Script
-  ansible.builtin.shell: |
-    set -o pipefail
-    echo '{{ migration_manager_source_export.content }}' | python3 /tmp/transform_json.py
-  register: migration_manager_clean_json_output
-  changed_when: false
-
-- name: Login to Target Server ({{ domain_name }})
+- name: Login to Target Server (Check state)
+  become: false
+  delegate_to: localhost
   ansible.builtin.uri:
-    url: "{{ migration_manager_target_base_url }}/login"
+    url: "{{ migration_manager_target_base_url }}login"
     method: POST
     body_format: json
     body:
       username: "{{ xui_app_username }}"
       password: "{{ xui_app_password }}"
     status_code: 200
-    validate_certs: true
-  register: migration_manager_target_login
-  delegate_to: localhost
+    validate_certs: false
+  register: target_login_check
+  ignore_errors: true 
 
-- name: Import Cleaned Config to Target
+- name: Login to Target Server (HTTP Fallback)
+  become: false
+  delegate_to: localhost
   ansible.builtin.uri:
-    url: "{{ migration_manager_target_base_url }}/panel/api/inbounds/import"
+    url: "http://{{ domain_name }}:{{ xui_app_web_port }}{{ xui_app_web_base_path }}login"
     method: POST
-    headers:
-      Cookie: "{{ migration_manager_target_login.cookies_string }}"
     body_format: json
-    body: "{{ migration_manager_clean_json_output.stdout }}"
+    body:
+      username: "{{ xui_app_username }}"
+      password: "{{ xui_app_password }}"
     status_code: 200
-  register: migration_manager_import_result
+  register: target_login_check_http
+  when: target_login_check.failed
+  
+- name: Set correct login fact
+  set_fact:
+    final_target_login: "{{ target_login_check_http if target_login_check.failed else target_login_check }}"
+    target_protocol: "{{ 'http' if target_login_check.failed else 'https' }}"
+
+- name: Get existing inbounds from Target
+  become: false
   delegate_to: localhost
+  ansible.builtin.uri:
+    url: "{{ target_protocol }}://{{ domain_name }}:{{ xui_app_web_port }}{{ xui_app_web_base_path }}panel/api/inbounds/list"
+    method: GET
+    headers:
+      Cookie: "{{ final_target_login.cookies_string }}"
+    return_content: true
+    validate_certs: false
+  register: target_existing_inbounds
 
-- name: Show Import Result
+# --- ШАГ 2: Блок миграции (выполняется ТОЛЬКО если список пуст) ---
+
+- name: Migration Block (Loop Import without modification)
+  when: (target_existing_inbounds.json.obj | length) == 0
+  block:
+    - name: Debug message
+      ansible.builtin.debug:
+        msg: "Target server is empty. Starting import loop to /import endpoint..."
+
+    # 1. Логинимся на Source
+    - name: Login to Source Server
+      become: false
+      delegate_to: localhost
+      ansible.builtin.uri:
+        url: "{{ migration_manager_source_url }}/login"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          username: "{{ migration_manager_source_username }}"
+          password: "{{ migration_manager_source_password }}"
+        status_code: 200
+        headers:
+          Content-Type: "application/x-www-form-urlencoded"
+        validate_certs: false
+      register: migration_manager_source_login
+
+    # 2. Скачиваем исходный JSON целиком
+    - name: Download Config
+      become: false
+      delegate_to: localhost
+      ansible.builtin.uri:
+        url: "{{ migration_manager_source_url }}/panel/api/inbounds/list"
+        method: GET
+        headers:
+          Cookie: "{{ migration_manager_source_login.cookies_string }}"
+        validate_certs: false
+        dest: /tmp/source_full_response.json
+
+    # 3. Python скрипт: берет список и отправляет каждый элемент по отдельности
+    - name: Create Loop Importer
+      become: false
+      delegate_to: localhost
+      ansible.builtin.copy:
+        dest: /tmp/loop_import.py
+        mode: '0755'
+        content: |
+          import json
+          import urllib.parse
+          import urllib.request
+          import ssl
+          import sys
+          import time
+
+          # --- КОНФИГУРАЦИЯ ---
+          # Используем тот же URL /import
+          url = "{{ target_protocol }}://{{ domain_name }}:{{ xui_app_web_port }}{{ xui_app_web_base_path }}panel/api/inbounds/import"
+          cookie = "{{ final_target_login.cookies_string }}"
+          source_file = "/tmp/source_full_response.json"
+
+          # Игнор SSL
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+
+          # --- ФУНКЦИЯ ОТПРАВКИ ОДНОГО ЭЛЕМЕНТА ---
+          def send_item(item_dict):
+              # Превращаем ОДИН объект в JSON-строку
+              item_json_str = json.dumps(item_dict)
+              
+              # Кладем в форму data={...}
+              form_data = {'data': item_json_str}
+              data_encoded = urllib.parse.urlencode(form_data).encode('utf-8')
+              
+              req = urllib.request.Request(url, data=data_encoded)
+              req.add_header('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
+              req.add_header('Cookie', cookie)
+              req.add_header('User-Agent', 'Ansible-Importer')
+
+              try:
+                  with urllib.request.urlopen(req, context=ctx) as response:
+                      resp_body = response.read().decode('utf-8')
+                      # Проверяем успех
+                      if '"success":true' in resp_body.lower() or '"success": true' in resp_body.lower():
+                          print(f"[OK] Port {item_dict.get('port')} imported.")
+                          return True
+                      else:
+                          print(f"[FAIL] Port {item_dict.get('port')} Response: {resp_body}")
+                          return False
+              except Exception as e:
+                  print(f"[ERROR] Port {item_dict.get('port')}: {e}")
+                  return False
+
+          # --- ГЛАВНАЯ ЛОГИКА ---
+          try:
+              with open(source_file, 'r') as f:
+                  raw_data = json.load(f)
+              
+              # Достаем список
+              inbounds_list = raw_data.get('obj', [])
+              
+              print(f"Found {len(inbounds_list)} items via Python.")
+              
+              errors = 0
+              for item in inbounds_list:
+                  # Отправляем БЕЗ изменений, но по одному
+                  if not send_item(item):
+                      errors += 1
+                  # Небольшая пауза для стабильности
+                  time.sleep(0.2)
+              
+              if errors == len(inbounds_list) and len(inbounds_list) > 0:
+                   print("FATAL: All imports failed.")
+                   sys.exit(1)
+              
+              print("Migration loop finished.")
+              sys.exit(0)
+
+          except Exception as e:
+              print(f"Script crashed: {e}")
+              sys.exit(1)
+
+    # 4. Запускаем
+    - name: Run Loop Import
+      become: false
+      delegate_to: localhost
+      ansible.builtin.command: python3 /tmp/loop_import.py
+      register: loop_import_result
+      
+    # 5. Результат
+    - name: Show Result
+      ansible.builtin.debug:
+        msg: "{{ loop_import_result.stdout_lines }}"
+
+    # 6. Уборка
+    - name: Cleanup
+      become: false
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/source_full_response.json
+        - /tmp/loop_import.py
+          
+- name: Skip message
   ansible.builtin.debug:
-    msg: "Import Status: {{ migration_manager_import_result.json }}"
-
-- name: Cleanup temporary script
-  ansible.builtin.file:
-    path: /tmp/transform_json.py
-    state: absent
+    msg: "Target server already has configurations ({{ target_existing_inbounds.json.obj | length }} inbounds). Migration skipped."
+  when: (target_existing_inbounds.json.obj | length) > 0

@@ -15,3 +15,11 @@
 
 - name: Import security tasks
   ansible.builtin.import_tasks: security.yml
+
+- name: Reboot the server and wait for it to come back
+  ansible.builtin.reboot:
+    msg: "Rebooting server after initial setup"
+    pre_reboot_delay: 0
+    post_reboot_delay: 30
+    reboot_timeout: 20
+  when: inventory_hostname in groups['initial_setup_group']
