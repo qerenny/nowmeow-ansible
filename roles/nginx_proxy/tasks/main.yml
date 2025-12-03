@@ -1,0 +1,46 @@
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+
+- name: Create web root directory
+  ansible.builtin.file:
+    path: "{{ nginx_proxy_web_root }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
+- name: Deploy placeholder index.html
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: "{{ nginx_proxy_web_root }}/index.html"
+    owner: www-data
+    group: www-data
+    mode: '0644'
+
+- name: Allow Nginx (www-data) to read LetsEncrypt certs
+  ansible.builtin.file:
+    path: "/etc/letsencrypt/{{ item }}"
+    mode: '0755'
+    state: directory
+  loop:
+    - live
+    - archive
+
+- name: Deploy Nginx configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: 'nginx -t -c %s'
+  notify: Restart Nginx
+
+- name: Enable and start Nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

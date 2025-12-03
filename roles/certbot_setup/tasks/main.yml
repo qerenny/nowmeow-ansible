@@ -1,0 +1,39 @@
+- name: Install Certbot and dependencies
+  ansible.builtin.apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: true
+
+- name: Check if certificate already exists
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+  register: certbot_setup_cert_check
+
+- name: Stop Nginx to free port 80 (if running)
+  ansible.builtin.service:
+    name: nginx
+    state: stopped
+  failed_when: false
+  when: not certbot_setup_cert_check.stat.exists
+
+- name: Obtain SSL certificate (Standalone mode)
+  ansible.builtin.command:
+    cmd: >
+      certbot certonly --standalone
+      --non-interactive
+      --agree-tos
+      --email {{ certbot_setup_email }}
+      -d {{ domain_name }}
+  when: not certbot_setup_cert_check.stat.exists
+  changed_when: true
+
+- name: Create Cron Job for Auto-Renewal
+  ansible.builtin.cron:
+    name: "Certbot Renew"
+    minute: "30"
+    hour: "3"
+    job: "/usr/bin/certbot renew --quiet --deploy-hook 'systemctl reload nginx'"
+    state: present
+    user: root

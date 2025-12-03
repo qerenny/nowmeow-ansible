@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+import json
+import sys
+
+# Параметры, которые мы меняем (подставляются Ansible)
+NEW_IP = "{{ ansible_host }}"
+NEW_DOMAIN = "{{ domain_name }}"
+
+def process_data(raw_data):
+    try:
+        # Загружаем сырой ответ от старого сервера
+        data = json.loads(raw_data)
+        
+        # 1. Извлекаем список из обертки {"success":true, "obj": [...]}
+        # API 3x-ui обычно возвращает список внутри ключа 'obj'
+        inbounds_list = data.get('obj', []) if isinstance(data, dict) else data
+
+        cleaned_inbounds = []
+
+        for inbound in inbounds_list:
+            # 2. Меняем IP адрес прослушивания на пустой (все интерфейсы)
+            # Это безопаснее для импорта, чтобы не привязываться к старому IP
+            inbound['listen'] = "" 
+            
+            # 3. Обработка streamSettings (это JSON-строка внутри JSON-объекта!)
+            if 'streamSettings' in inbound and inbound['streamSettings']:
+                try:
+                    stream_settings = json.loads(inbound['streamSettings'])
+                    
+                    # Замена домена в Reality (самое важное)
+                    if 'realitySettings' in stream_settings:
+                        if 'serverNames' in stream_settings['realitySettings']:
+                            # Меняем старый домен на новый
+                            stream_settings['realitySettings']['serverNames'] = [NEW_DOMAIN]
+                        
+                        # Обновляем ключи (Private/Public) если нужно? 
+                        # Пока оставляем старые ключи reality, чтобы клиенты не отвалились,
+                        # НО если ты хочешь новые ключи - скажи, добавим генерацию.
+                        # Сейчас мы переносим "как есть", меняя только адрес.
+                    
+                    # Замена домена в Headers/Host для других протоколов
+                    for settings_type in ['xhttpSettings', 'wsSettings', 'tcpSettings', 'grpcSettings']:
+                        if settings_type in stream_settings:
+                            if 'host' in stream_settings[settings_type]:
+                                stream_settings[settings_type]['host'] = NEW_DOMAIN
+                            if 'headers' in stream_settings[settings_type] and 'Host' in stream_settings[settings_type]['headers']:
+                                stream_settings[settings_type]['headers']['Host'] = NEW_DOMAIN
+
+                    # Запаковываем обратно в строку
+                    inbound['streamSettings'] = json.dumps(stream_settings)
+                    
+                except Exception as e:
+                    sys.stderr.write(f"Warning: Error processing streamSettings for inbound {inbound.get('id')}: {e}\n")
+
+            # Добавляем обработанный инбаунд в список
+            cleaned_inbounds.append(inbound)
+
+        # Выводим чистый JSON-список в stdout для Ansible
+        print(json.dumps(cleaned_inbounds))
+
+    except Exception as e:
+        sys.stderr.write(f"Critical Error parsing JSON: {e}\n")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    # Читаем JSON из stdin
+    input_data = sys.stdin.read()
+    process_data(input_data)

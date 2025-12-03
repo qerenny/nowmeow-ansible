@@ -1,0 +1,36 @@
+---
+- name: Ensure secrets directory exists locally
+  delegate_to: localhost
+  become: false
+  ansible.builtin.file:
+    path: "./secrets"
+    state: directory
+    mode: '0755'
+
+- name: Save credentials to local file
+  delegate_to: localhost
+  become: false
+  ansible.builtin.copy:
+    content: |
+      ========================================
+      SERVER: {{ inventory_hostname }} ({{ ansible_host }})
+      DOMAIN: {{ domain_name }}
+      DATE:   {{ ansible_date_time.iso8601 }}
+      ----------------------------------------
+      [PANEL ACCESS]
+      URL (Direct):      https://{{ domain_name }}:443{{ xui_app_web_base_path }}
+      Internal Port:     {{ xui_app_internal_port }}
+      Username:          {{ xui_app_username }}
+      Password:          {{ xui_app_password }}
+      
+      [SUBSCRIPTION SETTINGS]
+      Sub Port:          {{ xui_app_sub_port }}
+      Sub Path:          {{ xui_app_sub_path }}
+      Sub URL:           https://{{ domain_name }}:{{ xui_app_sub_port }}{{ xui_app_sub_path }}
+      
+      [CERTS]
+      Cert: {{ xui_app_cert_file }}
+      Key:  {{ xui_app_key_file }}
+      ========================================
+    dest: "./secrets/{{ inventory_hostname }}_xui_creds.txt"
+    mode: '0600'

@@ -1,0 +1,28 @@
+- name: Install dependencies (sqlite3, socat)
+  ansible.builtin.apt:
+    name:
+      - sqlite3
+      - socat
+    state: present
+    update_cache: true
+
+- name: Generate variables
+  ansible.builtin.import_tasks: generate_vars.yml
+
+- name: Install application
+  ansible.builtin.import_tasks: install.yml
+
+- name: Configure CLI
+  ansible.builtin.import_tasks: configure_cli.yml
+
+- name: Configure database
+  ansible.builtin.import_tasks: configure_db.yml
+
+- name: Save credentials
+  ansible.builtin.import_tasks: save_creds.yml
+
+- name: Allow Subscription Port in UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ xui_sub_port }}"
+    proto: tcp

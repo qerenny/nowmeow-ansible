@@ -1,0 +1,2 @@
+xui_app_cert_file: "/etc/letsencrypt/live/{{ domain_name }}/fullchain.pem"
+xui_app_key_file: "/etc/letsencrypt/live/{{ domain_name }}/privkey.pem"

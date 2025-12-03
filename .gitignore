@@ -1,0 +1,4 @@
+.vault_pass
+logs/
+*.log
+.DS_Store

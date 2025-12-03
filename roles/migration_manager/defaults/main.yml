@@ -1,0 +1,3 @@
+migration_manager_source_login_url: "https://nowmeow.pw:51192/T6JsyZcKxfMk2X4kQVKHx4nGFYbCA7/login"
+migration_manager_source_list_url: "https://nowmeow.pw:51192/T6JsyZcKxfMk2X4kQVKHx4nGFYbCA7/login/list"
+migration_manager_target_base_url: "https://{{ domain_name }}{{ xui_web_base_path }}"

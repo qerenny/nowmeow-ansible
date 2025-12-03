@@ -1,0 +1,3 @@
+---
+# Email для уведомлений об истечении сертификата (замени на свой реальный!)
+certbot_setup_email: "enderbrocreep3@gmail.com"

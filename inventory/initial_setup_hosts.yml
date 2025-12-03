@@ -1,0 +1,8 @@
+initial_setup_group:
+  hosts:
+    main_lv_01_init: 
+      ansible_host: 95.85.242.8
+      ansible_user: "{{ basic_ansible_user }}"
+      ansible_password: "{{ main_lv_01_password }}"
+      ansible_port: "{{ basic_ssh_port }}"                             
+      

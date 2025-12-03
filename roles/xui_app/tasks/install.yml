@@ -1,0 +1,11 @@
+- name: Check if x-ui is already installed
+  ansible.builtin.stat:
+    path: /usr/local/x-ui/x-ui
+  register: xui_bin
+
+- name: Install 3x-ui (MHSanaei fork)
+  ansible.builtin.shell: |
+    bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+  args:
+    executable: /bin/bash
+  when: not xui_bin.stat.exists

@@ -1,0 +1,76 @@
+---
+- name: Install Python3 (required for transformation script)
+  ansible.builtin.apt:
+    name: python3
+    state: present
+
+- name: Login to Source Server
+  ansible.builtin.uri:
+    url: "{{ migration_manager_source_login_url }}"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      username: "{{ migration_manager_source_username }}"
+      password: "{{ migration_manager_source_password }}"
+    status_code: 200
+    headers:
+      Content-Type: "application/x-www-form-urlencoded"
+  register: migration_manager_source_login
+  delegate_to: localhost # Выполняем с компьютера Ansible
+
+- name: Export Config from Source
+  ansible.builtin.uri:
+    url: "{{ migration_manager_source_list_url }}"
+    method: POST
+    headers:
+      Cookie: "{{ migration_manager_source_login.cookies_string }}"
+    return_content: true
+  register: migration_manager_source_export
+  delegate_to: localhost
+
+- name: Deploy Transformation Script
+  ansible.builtin.template:
+    src: process_config.py.j2
+    dest: /tmp/transform_json.py
+    mode: '0755'
+
+- name: Run Transformation Script
+  ansible.builtin.shell: |
+    set -o pipefail
+    echo '{{ migration_manager_source_export.content }}' | python3 /tmp/transform_json.py
+  register: migration_manager_clean_json_output
+  changed_when: false
+
+- name: Login to Target Server ({{ domain_name }})
+  ansible.builtin.uri:
+    url: "{{ migration_manager_target_base_url }}login"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ xui_username }}"
+      password: "{{ xui_password }}"
+    status_code: 200
+    validate_certs: true
+  register: migration_manager_target_login
+  delegate_to: localhost
+
+- name: Import Cleaned Config to Target
+  ansible.builtin.uri:
+    url: "{{ migration_manager_target_base_url }}panel/api/inbounds/import"
+    method: POST
+    headers:
+      Cookie: "{{ migration_manager_target_login.cookies_string }}"
+    body_format: json
+    body: "{{ migration_manager_clean_json_output.stdout }}"
+    status_code: 200
+  register: migration_manager_import_result
+  delegate_to: localhost
+
+- name: Show Import Result
+  ansible.builtin.debug:
+    msg: "Import Status: {{ migration_manager_import_result.json }}"
+
+- name: Cleanup temporary script
+  ansible.builtin.file:
+    path: /tmp/transform_json.py
+    state: absent
