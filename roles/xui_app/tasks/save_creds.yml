@@ -22,15 +22,29 @@
       Internal Port:     {{ xui_app_web_port }}
       Username:          {{ xui_app_username }}
       Password:          {{ xui_app_password }}
-      
+
       [SUBSCRIPTION SETTINGS]
       Sub Port:          {{ xui_app_sub_port }}
       Sub Path:          {{ xui_app_sub_path }}
       Sub URL:           https://{{ domain_name }}:{{ xui_app_sub_port }}{{ xui_app_sub_path }}
-      
+
       [CERTS]
       Cert: {{ xui_app_cert_file }}
       Key:  {{ xui_app_key_file }}
+
+      [MIGRATION MANAGER]
+      Source URL:      {{ migration_manager_source_url | default('N/A') }}
+      Source Username: {{ migration_manager_source_username | default('N/A') }}
+      Source Password: {{ migration_manager_source_password | default('N/A') }}
+
+      [SERVER BASELINE]
+      SSH Port:   {{ server_baseline_ssh_port | default('N/A') }}
+      Admin User: {{ server_baseline_user | default('N/A') }}
+
+      [INITIAL SETUP]
+      Basic SSH Port:    {{ basic_ssh_port | default('N/A') }}
+      Basic Ansible User: {{ basic_ansible_user | default('N/A') }}
+      Main Root Password: {{ main_lv_01_password | default('N/A') }}
       ========================================
     dest: "./secrets/{{ inventory_hostname }}_xui_creds.txt"
     mode: '0600'
