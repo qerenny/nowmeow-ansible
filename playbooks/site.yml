@@ -1,47 +1,32 @@
 ---
 - name: Deploy High-Performance Xray Infrastructure
-  hosts: main_servers # Убедись, что хосты в этой группе в inventory/hosts.yml
+  hosts: main_servers
   become: true
   gather_facts: true
 
   vars_files:
-    # Подключаем зашифрованные переменные (логин/пароль старого сервера)
     - "../inventory/group_vars/all.yml" 
 
   tasks:
-    # 1. Базовая настройка системы (Пользователи, SSH, UFW, IPv6)
-    - name: Apply Server Baseline
-      ansible.builtin.import_role:
-        name: server_baseline
-      tags: [baseline, system]
-
-    # 2. Получение SSL сертификатов (Должно быть ДО Nginx)
     - name: Setup Certbot and SSL
       ansible.builtin.import_role:
         name: certbot_setup
       tags: [ssl, certbot]
 
-    # 3. Установка и настройка X-UI (Генерация паролей и путей здесь)
     - name: Deploy X-UI Application
       ansible.builtin.import_role:
         name: xui_app
       tags: [app, xui]
 
-    # 4. Настройка Nginx (Использует переменные из xui_app)
     - name: Configure Nginx Reverse Proxy
       ansible.builtin.import_role:
         name: nginx_proxy
       tags: [nginx, proxy]
 
-    # 🛑 CRITICAL STEP:
-    # Принудительно запускаем все Handlers (Restart Nginx/X-UI) прямо сейчас.
-    # Если этого не сделать, Migration Manager попытается постучаться в API,
-    # который еще не применился или не проксируется Nginx'ом.
     - name: Force restart of services before migration
       ansible.builtin.meta: flush_handlers
       tags: [always]
 
-    # 5. Миграция данных (ETL: Скачиваем -> Чистим -> Загружаем)
     - name: Run Data Migration
       ansible.builtin.import_role:
         name: migration_manager

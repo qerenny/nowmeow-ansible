@@ -18,9 +18,8 @@ def process_data(raw_data):
         cleaned_inbounds = []
 
         for inbound in inbounds_list:
-            # 2. Меняем IP адрес прослушивания на пустой (все интерфейсы)
-            # Это безопаснее для импорта, чтобы не привязываться к старому IP
-            inbound['listen'] = "" 
+            # 2. Меняем IP адрес прослушивания на новый
+            inbound['listen'] = NEW_IP
             
             # 3. Обработка streamSettings (это JSON-строка внутри JSON-объекта!)
             if 'streamSettings' in inbound and inbound['streamSettings']:

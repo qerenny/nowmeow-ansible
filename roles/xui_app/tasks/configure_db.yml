@@ -4,7 +4,8 @@
     sqlite3 /etc/x-ui/x-ui.db "UPDATE settings SET value = '{{ item.value }}' WHERE key = '{{ item.key }}';"
   loop:
     # 1. Настройки Веб-сервера (Панели)
-    - { key: 'webListen',value: '' }
+    - { key: 'webListen',value: "{{ ansible_host }}" }
+    - { key: 'webDomain',value: "{{ domain_name }}" }
     - { key: 'webCertFile',value: "{{ xui_app_cert_file }}" }
     - { key: 'webKeyFile',value: "{{ xui_app_key_file }}" }
 
@@ -12,10 +13,10 @@
     - { key: 'subEnable',value: 'true' }
     - { key: 'subPort',value: "{{ xui_app_sub_port }}" }
     - { key: 'subPath',value: "{{ xui_app_sub_path }}" }
-    - { key: 'subDomain',value: "{{ domain_name }}" }
     - { key: 'subCertFile',value: "{{ xui_app_cert_file }}" }
     - { key: 'subKeyFile',value: "{{ xui_app_key_file }}" }
-    - { key: 'subURI',value: "" } # Очистка
-    - { key: 'subTitle',value: "NowMeow_VPN" }
+    - { key: 'subShowInfo',value: 'false' }
+    - { key: 'subEncrypt',value: 'false' }
+    - { key: 'subUpdates',value: '1' }
   changed_when: false
   notify: Restart x-ui

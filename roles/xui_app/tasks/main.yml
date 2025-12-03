@@ -24,5 +24,11 @@
 - name: Allow Subscription Port in UFW
   community.general.ufw:
     rule: allow
-    port: "{{ xui_sub_port }}"
+    port: "{{ item }}"
     proto: tcp
+  loop:
+    - "{{ xui_app_sub_port }}"
+    - "{{ xui_app_web_port }}"
+    - "443"
+    - "80"
+    - "11443"

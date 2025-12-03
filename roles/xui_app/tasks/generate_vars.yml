@@ -3,7 +3,7 @@
   ansible.builtin.set_fact:
     xui_app_username: "{{ lookup('password', '/dev/null length=8 chars=ascii_letters') }}"
     xui_app_password: "{{ lookup('password', '/dev/null length=16 chars=ascii_letters,digits') }}"
-    xui_app_internal_port: "{{ 10000 + (20000 | random) }}"
+    xui_app_web_port: "{{ 10000 + (20000 | random) }}"
     xui_app_sub_port: "{{ 30000 + (20000 | random) }}"
     xui_app_web_base_path: "/{{ lookup('password', '/dev/null length=12 chars=ascii_letters') }}/"
     xui_app_sub_path: "/{{ lookup('password', '/dev/null length=10 chars=ascii_letters') }}/"

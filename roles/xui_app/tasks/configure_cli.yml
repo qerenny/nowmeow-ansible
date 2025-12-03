@@ -1,8 +1,8 @@
 - name: Configure Basic X-UI Settings via CLI
   ansible.builtin.command: >
     /usr/local/x-ui/x-ui setting 
-    -username "{{ xui_username }}"
-    -password "{{ xui_password }}"
-    -port {{ xui_internal_port }}
-    -webBasePath "{{ xui_web_base_path }}"
+    -username "{{ xui_app_username }}"
+    -password "{{ xui_app_password }}"
+    -port {{ xui_app_web_port }}
+    -webBasePath "{{ xui_app_web_base_path }}"
   notify: Restart x-ui
