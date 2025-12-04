@@ -16,10 +16,9 @@
 - name: Import security tasks
   ansible.builtin.import_tasks: security.yml
 
-- name: Reboot the server and wait for it to come back
+- name: Launch Reboot (Fail on Reconnection)
   ansible.builtin.reboot:
-    msg: "Rebooting server after initial setup"
+    msg: "Reboot initiated by Ansible for server baseline changes to take effect."
     pre_reboot_delay: 0
-    post_reboot_delay: 30
     reboot_timeout: 20
-  when: inventory_hostname in groups['initial_setup_group']
+  ignore_errors: true
