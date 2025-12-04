@@ -64,12 +64,12 @@
 
 # --- ШАГ 2: Блок миграции (выполняется ТОЛЬКО если список пуст) ---
 
-- name: Migration Block (Loop Import without modification)
+- name: Migration Block (Loop Import with Deep Modification)
   when: (target_existing_inbounds.json.obj | length) == 0
   block:
     - name: Debug message
       ansible.builtin.debug:
-        msg: "Target server is empty. Starting import loop to /import endpoint..."
+        msg: "Target server is empty. Starting Deep Modification Import..."
 
     # 1. Логинимся на Source
     - name: Login to Source Server
@@ -88,7 +88,7 @@
         validate_certs: false
       register: migration_manager_source_login
 
-    # 2. Скачиваем исходный JSON целиком
+    # 2. Скачиваем конфиг
     - name: Download Config
       become: false
       delegate_to: localhost
@@ -100,8 +100,8 @@
         validate_certs: false
         dest: /tmp/source_full_response.json
 
-    # 3. Python скрипт: берет список и отправляет каждый элемент по отдельности
-    - name: Create Loop Importer
+    # 3. Python скрипт с парсингом JSON-строк
+    - name: Create Deep Loop Importer
       become: false
       delegate_to: localhost
       ansible.builtin.copy:
@@ -116,34 +116,101 @@
           import time
 
           # --- КОНФИГУРАЦИЯ ---
-          # Используем тот же URL /import
           url = "{{ target_protocol }}://{{ domain_name }}:{{ xui_app_web_port }}{{ xui_app_web_base_path }}panel/api/inbounds/import"
           cookie = "{{ final_target_login.cookies_string }}"
           source_file = "/tmp/source_full_response.json"
+          
+          NEW_IP = "{{ hostvars[inventory_hostname]['ansible_host'] }}"
+          NEW_DOMAIN = "{{ domain_name }}"
 
-          # Игнор SSL
           ctx = ssl.create_default_context()
           ctx.check_hostname = False
           ctx.verify_mode = ssl.CERT_NONE
 
-          # --- ФУНКЦИЯ ОТПРАВКИ ОДНОГО ЭЛЕМЕНТА ---
-          def send_item(item_dict):
-              # Превращаем ОДИН объект в JSON-строку
-              item_json_str = json.dumps(item_dict)
+          # --- ФУНКЦИЯ МОДИФИКАЦИИ ---
+          def modify_inbound(item):
+              # 1. Меняем Listen IP
+              item['listen'] = NEW_IP
               
-              # Кладем в форму data={...}
-              form_data = {'data': item_json_str}
-              data_encoded = urllib.parse.urlencode(form_data).encode('utf-8')
+              # 2. Обработка streamSettings (которая является СТРОКОЙ)
+              ss_raw = item.get('streamSettings')
               
-              req = urllib.request.Request(url, data=data_encoded)
-              req.add_header('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
-              req.add_header('Cookie', cookie)
-              req.add_header('User-Agent', 'Ansible-Importer')
+              # Если это строка (как в твоем примере), парсим её
+              ss_dict = {}
+              if isinstance(ss_raw, str) and ss_raw.strip():
+                  try:
+                      ss_dict = json.loads(ss_raw)
+                  except:
+                      return item # Если битая строка, не трогаем
+              elif isinstance(ss_raw, dict):
+                  ss_dict = ss_raw
+              else:
+                  return item # Если null или что-то еще
 
+              # --- МЕНЯЕМ ДОМЕН ВНУТРИ СЛОВАРЯ ---
+              
+              # А) REALITY
+              if 'realitySettings' in ss_dict:
+                  rs = ss_dict['realitySettings']
+                  # Меняем serverName в настройках
+                  if 'settings' in rs and 'serverName' in rs['settings']:
+                       rs['settings']['serverName'] = NEW_DOMAIN
+                  # Меняем список serverNames (для маскировки)
+                  if 'serverNames' in rs:
+                       # Обычно оставляем как есть, если это чужой сайт (yahoo.com),
+                       # но если там был старый домен, меняем на новый.
+                       # Раскомментируй, если нужно принудительно менять SNI:
+                       rs['serverNames'] = [NEW_DOMAIN]
+
+              # Б) TLS
+              if 'tlsSettings' in ss_dict:
+                  if 'serverName' in ss_dict['tlsSettings']:
+                      ss_dict['tlsSettings']['serverName'] = NEW_DOMAIN
+
+              # В) WS (Websocket)
+              if 'wsSettings' in ss_dict:
+                  headers = ss_dict['wsSettings'].get('headers', {})
+                  if headers and 'Host' in headers:
+                      headers['Host'] = NEW_DOMAIN
+                  ss_dict['wsSettings']['headers'] = headers
+
+              # Г) XHTTP (твой случай!)
+              if 'xhttpSettings' in ss_dict:
+                  if 'host' in ss_dict['xhttpSettings']:
+                      ss_dict['xhttpSettings']['host'] = NEW_DOMAIN
+
+              # Д) TCP HTTP
+              if 'tcpSettings' in ss_dict:
+                  header = ss_dict['tcpSettings'].get('header', {})
+                  if isinstance(header, dict):
+                      req = header.get('request', {})
+                      if isinstance(req, dict) and 'headers' in req:
+                          if 'Host' in req['headers']:
+                              req['headers']['Host'] = [NEW_DOMAIN]
+
+              # 3. ВАЖНО: Запаковываем обратно в JSON-СТРОКУ
+              item['streamSettings'] = json.dumps(ss_dict)
+              
+              return item
+
+          # --- ФУНКЦИЯ ОТПРАВКИ ---
+          def send_item(item_dict):
               try:
+                  # Сначала модифицируем
+                  item_dict = modify_inbound(item_dict)
+
+                  # Готовим форму
+                  item_json_str = json.dumps(item_dict)
+                  form_data = {'data': item_json_str}
+                  data_encoded = urllib.parse.urlencode(form_data).encode('utf-8')
+                  
+                  req = urllib.request.Request(url, data=data_encoded)
+                  req.add_header('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
+                  req.add_header('Cookie', cookie)
+                  req.add_header('User-Agent', 'Ansible-Importer')
+
                   with urllib.request.urlopen(req, context=ctx) as response:
                       resp_body = response.read().decode('utf-8')
-                      # Проверяем успех
                       if '"success":true' in resp_body.lower() or '"success": true' in resp_body.lower():
                           print(f"[OK] Port {item_dict.get('port')} imported.")
                           return True
@@ -154,29 +221,25 @@
                   print(f"[ERROR] Port {item_dict.get('port')}: {e}")
                   return False
 
-          # --- ГЛАВНАЯ ЛОГИКА ---
+          # --- MAIN ---
           try:
               with open(source_file, 'r') as f:
                   raw_data = json.load(f)
               
-              # Достаем список
               inbounds_list = raw_data.get('obj', [])
-              
-              print(f"Found {len(inbounds_list)} items via Python.")
+              print(f"Found {len(inbounds_list)} items. Processing...")
               
               errors = 0
               for item in inbounds_list:
-                  # Отправляем БЕЗ изменений, но по одному
                   if not send_item(item):
                       errors += 1
-                  # Небольшая пауза для стабильности
                   time.sleep(0.2)
               
               if errors == len(inbounds_list) and len(inbounds_list) > 0:
                    print("FATAL: All imports failed.")
                    sys.exit(1)
               
-              print("Migration loop finished.")
+              print("Migration finished.")
               sys.exit(0)
 
           except Exception as e:
@@ -205,7 +268,7 @@
       loop:
         - /tmp/source_full_response.json
         - /tmp/loop_import.py
-          
+
 - name: Skip message
   ansible.builtin.debug:
     msg: "Target server already has configurations ({{ target_existing_inbounds.json.obj | length }} inbounds). Migration skipped."
