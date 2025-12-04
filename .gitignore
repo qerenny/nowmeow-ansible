@@ -6,4 +6,4 @@ logs/
 .ansible/
 *.yaml
 *.txt
-secrets/
+playbooks/secrets/
