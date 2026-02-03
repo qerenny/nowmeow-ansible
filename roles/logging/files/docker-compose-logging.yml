@@ -1,0 +1,35 @@
+services:
+  elasticsearch:
+    image: arm64v8/elasticsearch:9.1.10
+    container_name: elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m -XX:+UnlockDiagnosticVMOptions -XX:-UseAES -XX:-UseCRC32Intrinsics -XX:UseSVE=0"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: arm64v8/kibana:9.1.10
+    container_name: kibana
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:9.1.10
+    container_name: filebeat
+    user: root
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+
+volumes:
+  es-data:
