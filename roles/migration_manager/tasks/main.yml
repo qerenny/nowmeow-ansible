@@ -161,6 +161,26 @@
                        # но если там был старый домен, меняем на новый.
                        # Раскомментируй, если нужно принудительно менять SNI:
                        rs['serverNames'] = [NEW_DOMAIN]
+                  
+                  # --- НОВЫЙ БЛОК: Установка flow для пользователей ---
+                  # Настройки пользователей лежат в item['settings'] (тоже строка)
+                  raw_settings = item.get('settings', '{}')
+                  try:
+                      if isinstance(raw_settings, str):
+                          settings_dict = json.loads(raw_settings)
+                      else:
+                          settings_dict = raw_settings
+
+                      # Проверяем наличие списка клиентов
+                      if 'clients' in settings_dict and isinstance(settings_dict['clients'], list):
+                          for client in settings_dict['clients']:
+                              # Принудительно ставим vision
+                              client['flow'] = "xtls-rprx-vision"
+                          
+                          # Сохраняем модифицированных клиентов обратно в item
+                          item['settings'] = json.dumps(settings_dict)
+                  except Exception as e:
+                      print(f"[WARN] Не удалось обновить flow для порта {item.get('port')}: {e}")
 
               # Б) TLS
               if 'tlsSettings' in ss_dict:

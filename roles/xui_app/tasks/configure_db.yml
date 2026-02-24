@@ -1,14 +1,14 @@
----
-- name: Apply Advanced Settings to SQLite DB (Idempotent)
+- name: Apply Advanced Settings to SQLite DB (True Idempotency)
   ansible.builtin.shell: |
-    CURRENT_VALUE=$(sqlite3 /etc/x-ui/x-ui.db "SELECT value FROM settings WHERE key='{{ item.key }}';")
-    
+    CURRENT_VALUE=$(sqlite3 /etc/x-ui/x-ui.db "SELECT value FROM settings WHERE key='{{ item.key }}' LIMIT 1;")
     TARGET_VALUE="{{ item.value }}"
 
     if [ "$CURRENT_VALUE" != "$TARGET_VALUE" ]; then
-        sqlite3 /etc/x-ui/x-ui.db "INSERT INTO settings (key, value) values ('{{ item.key }}', '$TARGET_VALUE');"
-        # Выводим маркер изменения, чтобы Ansible понял, что действие произошло
-        echo "CHANGED" 
+        # Удаляем все дубликаты этого ключа, если они есть
+        sqlite3 /etc/x-ui/x-ui.db "DELETE FROM settings WHERE key='{{ item.key }}';"
+        # Вставляем чистое новое значение
+        sqlite3 /etc/x-ui/x-ui.db "INSERT INTO settings (key, value) VALUES ('{{ item.key }}', '$TARGET_VALUE');"
+        echo "CHANGED"
     fi
   args:
     executable: /bin/bash

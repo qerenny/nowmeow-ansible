@@ -21,6 +21,9 @@
 - name: Save credentials
   ansible.builtin.import_tasks: save_creds.yml
 
+- name: Do the security
+  ansible.builtin.import_tasks: security.yml
+
 - name: Allow Subscription Port in UFW
   community.general.ufw:
     rule: allow
@@ -32,3 +35,4 @@
     - "443"
     - "80"
     - "11443"
+    - "8443"

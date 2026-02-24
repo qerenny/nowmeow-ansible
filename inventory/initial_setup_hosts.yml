@@ -6,8 +6,17 @@ initial_setup_group:
     #   ansible_password: "{{ main_ee_01_password }}"
     #   ansible_port: "{{ basic_ssh_port }}"  
     # main_de_01_init: 
-    #   ansible_host: 64.188.79.89
+    #   ansible_host: 95.85.252.8
     #   ansible_user: "{{ basic_ansible_user }}"
     #   ansible_password: "{{ main_de_01_password }}"
     #   ansible_port: "{{ basic_ssh_port }}"                            
-      
+    # main_ru_01_init: 
+    #   ansible_host: 195.209.219.124
+    #   ansible_user: ubuntuuser
+    #   ansible_password: "{{ main_ru_01_password }}"
+    #   ansible_port: "{{ basic_ssh_port }}"    
+    bot_ru_01_init: 
+      ansible_host: 195.209.219.110
+      ansible_user: ubuntuuser
+      ansible_password: "{{ bot_ru_01_password }}"
+      ansible_port: "{{ basic_ssh_port }}"    
