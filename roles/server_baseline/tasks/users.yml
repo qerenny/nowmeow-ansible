@@ -23,5 +23,5 @@
   ansible.posix.authorized_key:
     user: "{{ server_baseline_user }}"
     state: present
-    key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/nowmeow_servers.pub') }}"
+    key: "{{ lookup('file', server_baseline_public_key_file) }}"
   when: inventory_hostname in groups['initial_setup_group']

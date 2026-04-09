@@ -3,12 +3,29 @@
     path: /usr/local/x-ui/x-ui
   register: xui_bin
 
-- name: Install 3x-ui (MHSanaei fork)
-  ansible.builtin.shell: |
-    curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh -o /tmp/install_xui.sh
-    chmod +x /tmp/install_xui.sh
+- name: Download 3x-ui installer
+  ansible.builtin.get_url:
+    url: "{{ xui_app_install_script_url }}"
+    dest: "{{ xui_app_install_script_path }}"
+    mode: '0755'
+  when:
+    - xui_app_manage_install | bool
+    - not xui_bin.stat.exists or xui_app_force_update | bool
 
-    echo "n" | bash /tmp/install_xui.sh
-  args:
-    executable: /bin/bash
-  when: not xui_bin.stat.exists
+- name: Install or update 3x-ui (MHSanaei fork)
+  ansible.builtin.command:
+    cmd: "bash {{ xui_app_install_script_path }}"
+    stdin: "n\n"
+  register: xui_install_result
+  changed_when: true
+  when:
+    - xui_app_manage_install | bool
+    - not xui_bin.stat.exists or xui_app_force_update | bool
+
+- name: Remove downloaded 3x-ui installer
+  ansible.builtin.file:
+    path: "{{ xui_app_install_script_path }}"
+    state: absent
+  when:
+    - xui_app_manage_install | bool
+    - not xui_bin.stat.exists or xui_app_force_update | bool

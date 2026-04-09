@@ -32,6 +32,14 @@
     group: www-data
     mode: '0755'
 
+- name: Create ACME web root directory
+  ansible.builtin.file:
+    path: "{{ nginx_proxy_acme_root }}/.well-known/acme-challenge"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+
 - name: Deploy placeholder index.html
   ansible.builtin.template:
     src: index.html.j2

@@ -35,9 +35,19 @@ http {
         listen 80;
         # listen [::]:80;
         server_name {{ domain_name }};
-        return 301 https://$host$request_uri;
+
+        location ^~ /.well-known/acme-challenge/ {
+            root {{ nginx_proxy_acme_root }};
+            default_type text/plain;
+            try_files $uri =404;
+        }
+
+        location / {
+            return 301 https://$host$request_uri;
+        }
     }
 
+{% if nginx_proxy_mode == "xver" %}
     server {
         listen                  127.0.0.1:{{ nginx_proxy_fallback_port }} ssl default_server;
 
@@ -82,4 +92,47 @@ http {
             proxy_set_header X-Forwarded-Port     $server_port;
         }
     }
+{% else %}
+    server {
+        listen                  443 ssl default_server;
+
+        ssl_reject_handshake    on;
+        ssl_protocols           TLSv1.2 TLSv1.3;
+
+        ssl_session_timeout     1h;
+        ssl_session_cache       shared:SSL:10m;
+    }
+
+    server {
+        listen                     443 ssl http2;
+        server_name                {{ domain_name }};
+
+        ssl_certificate            {{ xui_app_cert_file }};
+        ssl_certificate_key        {{ xui_app_key_file }};
+
+        ssl_protocols              TLSv1.2 TLSv1.3;
+        ssl_ciphers                TLS13_AES_128_GCM_SHA256:TLS13_AES_256_GCM_SHA384:TLS13_CHACHA20_POLY1305_SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305;
+        ssl_prefer_server_ciphers  on;
+
+        ssl_stapling               on;
+        ssl_stapling_verify        on;
+        resolver                   1.1.1.1 valid=60s;
+        resolver_timeout           2s;
+
+        access_log /var/log/nginx/visiting-card-access.log main;
+
+        location / {
+            root   {{ nginx_proxy_web_root }};
+            index  index.html;
+            try_files $uri $uri/ /index.html;
+
+            proxy_set_header X-Real-IP            $remote_addr;
+            proxy_set_header Forwarded            $proxy_add_forwarded;
+            proxy_set_header X-Forwarded-For      $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto    $scheme;
+            proxy_set_header X-Forwarded-Host     $host;
+            proxy_set_header X-Forwarded-Port     $server_port;
+        }
+    }
+{% endif %}
 }

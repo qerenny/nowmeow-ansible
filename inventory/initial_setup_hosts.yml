@@ -15,8 +15,21 @@ initial_setup_group:
     #   ansible_user: ubuntuuser
     #   ansible_password: "{{ main_ru_01_password }}"
     #   ansible_port: "{{ basic_ssh_port }}"    
-    bot_ru_01_init: 
-      ansible_host: 195.209.219.110
-      ansible_user: ubuntuuser
+    bot_ru_01_init:
+      ansible_host: 95.85.255.224
+      ansible_user: root
       ansible_password: "{{ bot_ru_01_password }}"
-      ansible_port: "{{ basic_ssh_port }}"    
+      ansible_port: "{{ basic_ssh_port }}"
+    # yc_ru_01_init:
+    #   ansible_host: 158.160.38.93
+    #   ansible_user: yc-user
+    #   ansible_ssh_private_key_file: "{{ basic_ansible_private_key_file }}"
+    #   ansible_ssh_common_args: "-o IdentitiesOnly=yes"
+    #   ansible_port: "{{ basic_ssh_port }}"
+    # yc_ru_02_init:
+    #   ansible_host: 158.160.109.171
+    #   ansible_user: yc-user
+    #   ansible_ssh_private_key_file: "{{ basic_ansible_private_key_file }}"
+    #   ansible_ssh_common_args: "-o IdentitiesOnly=yes"
+    #   ansible_port: "{{ basic_ssh_port }}"
+

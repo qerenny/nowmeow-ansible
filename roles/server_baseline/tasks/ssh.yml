@@ -18,6 +18,7 @@
     mode: '0644'
     validate: 'sshd -t -f %s'
   when: inventory_hostname in groups['initial_setup_group']
+  notify: Restart sshd
   
 - name: Disable DNS resolution and DNS Forwarding in SSHD (Extra Security)
   ansible.builtin.lineinfile:
@@ -29,3 +30,4 @@
   loop:
     - { setting: 'UseDNS', value: 'no' }
     - { setting: 'GSSAPIAuthentication', value: 'no' }
+  notify: Restart sshd

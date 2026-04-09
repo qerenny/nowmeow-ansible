@@ -16,7 +16,7 @@
   changed_when: "'CHANGED' in db_update_result.stdout"
   notify: Restart x-ui
   loop:
-    - { key: 'webListen', value: "{{ ansible_host }}" }
+    - { key: 'webListen', value: "{{ xui_app_panel_bind_host }}" }
     - { key: 'webDomain', value: "{{ domain_name }}" }
     - { key: 'webCertFile', value: "{{ xui_app_cert_file }}" }
     - { key: 'webKeyFile', value: "{{ xui_app_key_file }}" }

@@ -3,13 +3,13 @@
   delegate_to: localhost
   become: false
   ansible.builtin.file:
-    path: "./secrets"
+    path: "{{ xui_app_local_secrets_dir }}"
     state: directory
     mode: '0755'
 
 - name: Define path for persistent vars file
   ansible.builtin.set_fact:
-    local_vars_file: "./secrets/{{ inventory_hostname }}_vars.yml"
+    local_vars_file: "{{ xui_app_local_secrets_dir }}/{{ inventory_hostname }}_vars.yml"
 
 - name: Check if vars file already exists
   delegate_to: localhost
@@ -48,4 +48,5 @@
           xui_app_sub_path: "{{ xui_app_sub_path }}"
         dest: "{{ local_vars_file }}"
         mode: '0600'
+      no_log: true
   when: not existing_vars_file.stat.exists
